@@ -1,6 +1,6 @@
 # hindenrank-mcp
 
-MCP server for [Hindenrank](https://hindenrank.com) DeFi risk ratings. Check protocol risk grades from Claude, Cursor, or any MCP-compatible client.
+MCP server for [Hindenrank](https://hindenrank.com) crypto risk ratings. Check protocol risk grades from Claude, Cursor, or any MCP-compatible client.
 
 ## Quick Start
 

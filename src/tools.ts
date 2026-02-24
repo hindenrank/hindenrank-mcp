@@ -156,9 +156,9 @@ export const TOOL_DEFINITIONS = [
   {
     name: "get_protocol_risk",
     description:
-      "Look up the risk grade, top risks, and verdict for a DeFi protocol. " +
+      "Look up the risk grade, top risks, and verdict for a crypto protocol. " +
       "Accepts protocol name or slug (e.g., 'Aave', 'uniswap-v3'). " +
-      "Use this before interacting with any DeFi protocol to check its safety.",
+      "Use this before interacting with any crypto protocol to check its safety.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -173,7 +173,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "search_protocols",
     description:
-      "Search for DeFi protocols by name. Returns matching protocols with their risk grades. " +
+      "Search for crypto protocols by name. Returns matching protocols with their risk grades. " +
       "Useful when you don't know the exact protocol name.",
     inputSchema: {
       type: "object" as const,
@@ -193,7 +193,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "list_protocols",
     description:
-      "List DeFi protocols with optional filters. Filter by sector (e.g., 'Lending', 'DEX') " +
+      "List crypto protocols with optional filters. Filter by sector (e.g., 'Lending', 'DEX') " +
       "or grade range. Returns protocols sorted by risk score (riskiest first).",
     inputSchema: {
       type: "object" as const,
@@ -220,7 +220,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "compare_protocols",
     description:
-      "Compare 2-5 DeFi protocols side by side. Shows risk grades, key risks, " +
+      "Compare 2-5 crypto protocols side by side. Shows risk grades, key risks, " +
       "and identifies the safest, riskiest, and best value option. " +
       "Requires an API key (free tier or above).",
     inputSchema: {

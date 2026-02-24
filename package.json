@@ -1,0 +1,25 @@
+{
+  "name": "hindenrank-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Hindenrank DeFi risk ratings",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "hindenrank-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}

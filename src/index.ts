@@ -65,6 +65,43 @@ server.tool(
   }),
 );
 
+server.tool(
+  "get_vault_risk",
+  TOOL_DEFINITIONS[4].description,
+  { vault_id: z.string().describe("Vault ID or name") },
+  async (args) => ({
+    content: [{ type: "text", text: await handlers.get_vault_risk(args) }],
+  }),
+);
+
+server.tool(
+  "search_vaults",
+  TOOL_DEFINITIONS[5].description,
+  {
+    query: z.string().min(2).describe("Search query"),
+    limit: z.number().optional().describe("Max results (default 10)"),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: await handlers.search_vaults(args) }],
+  }),
+);
+
+server.tool(
+  "list_vaults",
+  TOOL_DEFINITIONS[6].description,
+  {
+    source: z.string().optional().describe("Filter by source: beefy, hyperliquid, morpho"),
+    chain: z.string().optional().describe("Filter by chain"),
+    min_grade: z.string().optional().describe("Minimum risk grade"),
+    max_grade: z.string().optional().describe("Maximum risk grade"),
+    rated: z.boolean().optional().describe("Only return rated vaults"),
+    limit: z.number().optional().describe("Max results (default 20)"),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: await handlers.list_vaults(args) }],
+  }),
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);

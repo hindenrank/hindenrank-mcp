@@ -1,4 +1,4 @@
-import { HindenrankClient, BasicProtocol } from "./client.js";
+import { HindenrankClient, BasicProtocol, BasicVault } from "./client.js";
 
 function formatGrade(protocol: BasicProtocol): string {
   const parts = [
@@ -38,6 +38,46 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
+}
+
+function formatVault(vault: BasicVault): string {
+  const parts = [
+    `${vault.name} (${vault.vaultId})`,
+    `Source: ${vault.source} | Chain: ${vault.chain}`,
+  ];
+
+  if (vault.riskGrade) {
+    parts.push(`Risk Grade: ${vault.riskGrade} (${vault.riskScore}/100 — lower is safer)`);
+  } else {
+    parts.push("Risk Grade: Unrated");
+  }
+
+  if (vault.tvl !== null) parts.push(`TVL: $${formatNumber(vault.tvl)}`);
+  if (vault.apy !== null) parts.push(`APY: ${(vault.apy * 100).toFixed(2)}%`);
+
+  if (vault.assets.length > 0) {
+    parts.push(`Assets: ${vault.assets.join(", ")}`);
+  }
+
+  if (vault.protocolSlugs.length > 0) {
+    parts.push(`Underlying Protocols: ${vault.protocolSlugs.join(", ")}`);
+  }
+
+  // Include performance metrics if available (free+ tier)
+  if ("cumulativeReturn" in vault && vault.cumulativeReturn !== null) {
+    parts.push(`Cumulative Return: ${((vault.cumulativeReturn as number) * 100).toFixed(2)}%`);
+  }
+  if ("maxDrawdown" in vault && vault.maxDrawdown !== null) {
+    parts.push(`Max Drawdown: ${((vault.maxDrawdown as number) * 100).toFixed(2)}%`);
+  }
+  if ("sharpeRatio" in vault && vault.sharpeRatio !== null) {
+    parts.push(`Sharpe Ratio: ${(vault.sharpeRatio as number).toFixed(2)}`);
+  }
+  if ("effectiveLeverage" in vault && vault.effectiveLeverage !== null) {
+    parts.push(`Effective Leverage: ${(vault.effectiveLeverage as number).toFixed(2)}x`);
+  }
+
+  return parts.join("\n");
 }
 
 export function createToolHandlers(client: HindenrankClient) {
@@ -149,6 +189,70 @@ export function createToolHandlers(client: HindenrankClient) {
 
       return lines.join("\n");
     },
+
+    get_vault_risk: async (args: { vault_id: string }) => {
+      try {
+        const result = await client.getVault(args.vault_id);
+        return formatVault(result.data);
+      } catch {
+        // Try searching by name
+        const searchResult = await client.searchVaults(args.vault_id, 1);
+        if (searchResult.data.length === 0) {
+          return `No vault found matching "${args.vault_id}". Try searching with search_vaults.`;
+        }
+        const found = searchResult.data[0];
+        const detail = await client.getVault(found.vaultId);
+        return formatVault(detail.data);
+      }
+    },
+
+    search_vaults: async (args: { query: string; limit?: number }) => {
+      const result = await client.searchVaults(args.query, args.limit ?? 10);
+      if (result.data.length === 0) {
+        return `No vaults found matching "${args.query}".`;
+      }
+
+      const lines = [`Found ${result.data.length} vault(s) matching "${args.query}":\n`];
+      for (const v of result.data) {
+        const grade = v.riskGrade ? `Grade: ${v.riskGrade} (${v.riskScore}/100)` : "Unrated";
+        const tvl = v.tvl !== null ? ` | TVL: $${formatNumber(v.tvl)}` : "";
+        const apy = v.apy !== null ? ` | APY: ${(v.apy * 100).toFixed(2)}%` : "";
+        lines.push(`- ${v.name} (${v.source}/${v.chain}) — ${grade}${tvl}${apy}`);
+      }
+      return lines.join("\n");
+    },
+
+    list_vaults: async (args: {
+      source?: string;
+      chain?: string;
+      min_grade?: string;
+      max_grade?: string;
+      rated?: boolean;
+      limit?: number;
+    }) => {
+      const result = await client.listVaults({
+        source: args.source,
+        chain: args.chain,
+        minGrade: args.min_grade,
+        maxGrade: args.max_grade,
+        rated: args.rated,
+        limit: args.limit ?? 20,
+      });
+
+      if (result.data.length === 0) {
+        return "No vaults match the given filters.";
+      }
+
+      const meta = result.meta as { total?: number };
+      const lines = [`Showing ${result.data.length} of ${meta.total ?? "?"} vaults:\n`];
+      for (const v of result.data) {
+        const grade = v.riskGrade ? `Grade: ${v.riskGrade} (${v.riskScore}/100)` : "Unrated";
+        const tvl = v.tvl !== null ? ` | TVL: $${formatNumber(v.tvl)}` : "";
+        const apy = v.apy !== null ? ` | APY: ${(v.apy * 100).toFixed(2)}%` : "";
+        lines.push(`- ${v.name} — ${grade}${tvl}${apy} | ${v.source}/${v.chain}`);
+      }
+      return lines.join("\n");
+    },
   };
 }
 
@@ -235,6 +339,79 @@ export const TOOL_DEFINITIONS = [
         },
       },
       required: ["protocols"],
+    },
+  },
+  {
+    name: "get_vault_risk",
+    description:
+      "Look up the risk grade for a DeFi vault (Beefy, Hyperliquid, or Morpho). " +
+      "Returns risk score, APY, TVL, underlying protocols, and performance metrics. " +
+      "Use this to check vault safety before depositing. Accepts vault ID or name.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        vault_id: {
+          type: "string",
+          description: "Vault ID or name (e.g., 'hl-0x1234...', 'HYPE Maxi')",
+        },
+      },
+      required: ["vault_id"],
+    },
+  },
+  {
+    name: "search_vaults",
+    description:
+      "Search for DeFi vaults by name or asset. Returns matching vaults with risk grades, " +
+      "APY, and TVL. Searches across Beefy, Hyperliquid, and Morpho vaults.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query — vault name or asset (e.g., 'ETH', 'HYPE', 'aave')",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum results to return (default 10, max 50)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "list_vaults",
+    description:
+      "List DeFi vault risk ratings with optional filters. Filter by source (beefy, hyperliquid, morpho), " +
+      "chain, or grade range. Use rated=true to only show graded vaults. " +
+      "Essential for building vault-of-vaults strategies or screening vault risk.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        source: {
+          type: "string",
+          description: "Filter by source: beefy, hyperliquid, or morpho",
+        },
+        chain: {
+          type: "string",
+          description: "Filter by chain: ethereum, arbitrum, base, etc.",
+        },
+        min_grade: {
+          type: "string",
+          description: "Minimum risk grade (e.g., 'C' to only show C or riskier)",
+        },
+        max_grade: {
+          type: "string",
+          description: "Maximum risk grade (e.g., 'B' to only show B or safer)",
+        },
+        rated: {
+          type: "boolean",
+          description: "Set to true to only return vaults with risk grades",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum results (default 20)",
+        },
+      },
     },
   },
 ];

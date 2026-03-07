@@ -52,6 +52,22 @@ export interface SectorInfo {
   averageRawScore: number;
 }
 
+export interface BasicVault {
+  vaultId: string;
+  name: string;
+  chain: string;
+  source: string;
+  assets: string[];
+  protocolSlugs: string[];
+  riskScore: number | null;
+  riskGrade: string | null;
+  tvl: number | null;
+  apy: number | null;
+  status: string;
+  lastSynced: string;
+  [key: string]: unknown;
+}
+
 export class HindenrankClient {
   private baseUrl: string;
   private apiKey?: string;
@@ -120,5 +136,36 @@ export class HindenrankClient {
 
   async listSectors(): Promise<ApiResponse<SectorInfo[]>> {
     return this.fetch<SectorInfo[]>(`${this.baseUrl}/sectors`);
+  }
+
+  async getVault(vaultId: string): Promise<ApiResponse<BasicVault>> {
+    return this.fetch<BasicVault>(`${this.baseUrl}/vaults/${encodeURIComponent(vaultId)}`);
+  }
+
+  async searchVaults(query: string, limit = 10): Promise<ApiResponse<BasicVault[]>> {
+    return this.fetch<BasicVault[]>(`${this.baseUrl}/vaults/search`, {
+      q: query,
+      limit: String(limit),
+    });
+  }
+
+  async listVaults(options?: {
+    source?: string;
+    chain?: string;
+    minGrade?: string;
+    maxGrade?: string;
+    rated?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<BasicVault[]>> {
+    const params: Record<string, string> = {};
+    if (options?.source) params.source = options.source;
+    if (options?.chain) params.chain = options.chain;
+    if (options?.minGrade) params.minGrade = options.minGrade;
+    if (options?.maxGrade) params.maxGrade = options.maxGrade;
+    if (options?.rated) params.rated = "true";
+    if (options?.limit) params.limit = String(options.limit);
+    if (options?.offset) params.offset = String(options.offset);
+    return this.fetch<BasicVault[]>(`${this.baseUrl}/vaults`, params);
   }
 }

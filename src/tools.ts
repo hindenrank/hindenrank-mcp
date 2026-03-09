@@ -225,6 +225,7 @@ export function createToolHandlers(client: HindenrankClient) {
     list_vaults: async (args: {
       source?: string;
       chain?: string;
+      strategy?: string;
       min_grade?: string;
       max_grade?: string;
       rated?: boolean;
@@ -233,6 +234,7 @@ export function createToolHandlers(client: HindenrankClient) {
       const result = await client.listVaults({
         source: args.source,
         chain: args.chain,
+        strategy: args.strategy,
         minGrade: args.min_grade,
         maxGrade: args.max_grade,
         rated: args.rated,
@@ -250,6 +252,80 @@ export function createToolHandlers(client: HindenrankClient) {
         const tvl = v.tvl !== null ? ` | TVL: $${formatNumber(v.tvl)}` : "";
         const apy = v.apy !== null ? ` | APY: ${(v.apy * 100).toFixed(2)}%` : "";
         lines.push(`- ${v.name} — ${grade}${tvl}${apy} | ${v.source}/${v.chain}`);
+      }
+      return lines.join("\n");
+    },
+
+    get_vault_correlations: async () => {
+      const result = await client.getVaultCorrelations();
+      const d = result.data;
+      const lines = [
+        `Vault Correlation Matrix (${d.vaultCount} vaults, ${d.windowDays}-day window)`,
+        `Computed: ${d.computedAt}`,
+      ];
+      if (d.diversificationAll !== null) {
+        lines.push(`Overall Diversification Score: ${d.diversificationAll.toFixed(1)}/100`);
+      }
+      lines.push("");
+      lines.push(`Vault IDs: ${d.vaultIds.join(", ")}`);
+      lines.push("");
+      lines.push("Pairwise correlations (showing |r| > 0.3):");
+      for (const id1 of d.vaultIds) {
+        for (const id2 of d.vaultIds) {
+          if (id1 >= id2) continue;
+          const r = d.matrix[id1]?.[id2];
+          if (r !== undefined && Math.abs(r) > 0.3) {
+            lines.push(`  ${id1} ↔ ${id2}: ${r.toFixed(3)}`);
+          }
+        }
+      }
+      return lines.join("\n");
+    },
+
+    get_diversification_score: async (args: { vault_ids: string[] }) => {
+      const result = await client.getDiversificationScore(args.vault_ids);
+      const d = result.data;
+      const lines = [
+        `Diversification Score for ${d.vaultIds.length} vaults`,
+        `Vaults: ${d.vaultIds.join(", ")}`,
+      ];
+      if (d.diversificationScore !== null) {
+        lines.push(`Score: ${d.diversificationScore.toFixed(1)}/100 (higher = more diversified)`);
+      } else {
+        lines.push("Score: N/A (insufficient data)");
+      }
+      lines.push(`Computed: ${d.computedAt}`);
+      return lines.join("\n");
+    },
+
+    get_model_portfolio: async (args: {
+      max_vaults?: number;
+      min_sharpe?: number;
+      max_correlation?: number;
+      strategies?: string;
+      realtime?: boolean;
+    }) => {
+      const result = await client.getModelPortfolio({
+        maxVaults: args.max_vaults,
+        minSharpe: args.min_sharpe,
+        maxCorrelation: args.max_correlation,
+        strategies: args.strategies,
+        realtime: args.realtime,
+      });
+      const d = result.data;
+      const lines = [
+        `Model Portfolio (${d.portfolio.length} vaults)`,
+      ];
+      if (d.diversificationScore !== null) {
+        lines.push(`Portfolio Diversification: ${d.diversificationScore.toFixed(1)}/100`);
+      }
+      lines.push(`Computed: ${d.computedAt}`);
+      lines.push("");
+      for (const entry of d.portfolio) {
+        const strategy = entry.strategyType ? ` [${entry.strategyType}]` : "";
+        const sharpe = entry.sharpeRatio !== null ? ` | Sharpe: ${entry.sharpeRatio.toFixed(2)}` : "";
+        const grade = entry.riskGrade ? ` | Risk: ${entry.riskGrade}` : "";
+        lines.push(`- ${entry.name}${strategy} — Weight: ${(entry.weight * 100).toFixed(1)}%${sharpe}${grade}`);
       }
       return lines.join("\n");
     },
@@ -395,6 +471,10 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           description: "Filter by chain: ethereum, arbitrum, base, etc.",
         },
+        strategy: {
+          type: "string",
+          description: "Filter by strategy type (e.g., 'delta-neutral', 'momentum', 'basis')",
+        },
         min_grade: {
           type: "string",
           description: "Minimum risk grade (e.g., 'C' to only show C or riskier)",
@@ -410,6 +490,62 @@ export const TOOL_DEFINITIONS = [
         limit: {
           type: "number",
           description: "Maximum results (default 20)",
+        },
+      },
+    },
+  },
+  {
+    name: "get_vault_correlations",
+    description:
+      "Get the pairwise return correlation matrix across all rated Hyperliquid vaults. Requires Pro API key.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
+    name: "get_diversification_score",
+    description:
+      "Calculate a diversification score (0-100) for a basket of vault IDs. Higher = more diversified.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        vault_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Vault IDs to calculate diversification for (minimum 2)",
+          minItems: 2,
+        },
+      },
+      required: ["vault_ids"],
+    },
+  },
+  {
+    name: "get_model_portfolio",
+    description:
+      "Get the recommended model portfolio allocation across Hyperliquid vaults for a Vault-of-Vaults strategy. Requires Pro API key.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        max_vaults: {
+          type: "number",
+          description: "Maximum number of vaults in the portfolio",
+        },
+        min_sharpe: {
+          type: "number",
+          description: "Minimum Sharpe ratio threshold for inclusion",
+        },
+        max_correlation: {
+          type: "number",
+          description: "Maximum pairwise correlation allowed (0-1)",
+        },
+        strategies: {
+          type: "string",
+          description: "Comma-separated strategy types to include (e.g., 'delta-neutral,momentum')",
+        },
+        realtime: {
+          type: "boolean",
+          description: "Use realtime data instead of cached (slower but fresher)",
         },
       },
     },

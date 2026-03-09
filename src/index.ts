@@ -92,6 +92,7 @@ server.tool(
   {
     source: z.string().optional().describe("Filter by source: beefy, hyperliquid, morpho"),
     chain: z.string().optional().describe("Filter by chain"),
+    strategy: z.string().optional().describe("Filter by strategy type"),
     min_grade: z.string().optional().describe("Minimum risk grade"),
     max_grade: z.string().optional().describe("Maximum risk grade"),
     rated: z.boolean().optional().describe("Only return rated vaults"),
@@ -99,6 +100,41 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: await handlers.list_vaults(args) }],
+  }),
+);
+
+server.tool(
+  "get_vault_correlations",
+  TOOL_DEFINITIONS[7].description,
+  {},
+  async () => ({
+    content: [{ type: "text", text: await handlers.get_vault_correlations() }],
+  }),
+);
+
+server.tool(
+  "get_diversification_score",
+  TOOL_DEFINITIONS[8].description,
+  {
+    vault_ids: z.array(z.string()).min(2).describe("Vault IDs to calculate diversification for"),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: await handlers.get_diversification_score(args) }],
+  }),
+);
+
+server.tool(
+  "get_model_portfolio",
+  TOOL_DEFINITIONS[9].description,
+  {
+    max_vaults: z.number().optional().describe("Maximum number of vaults"),
+    min_sharpe: z.number().optional().describe("Minimum Sharpe ratio"),
+    max_correlation: z.number().optional().describe("Maximum pairwise correlation"),
+    strategies: z.string().optional().describe("Comma-separated strategy types"),
+    realtime: z.boolean().optional().describe("Use realtime data"),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: await handlers.get_model_portfolio(args) }],
   }),
 );
 

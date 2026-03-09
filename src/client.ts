@@ -152,6 +152,7 @@ export class HindenrankClient {
   async listVaults(options?: {
     source?: string;
     chain?: string;
+    strategy?: string;
     minGrade?: string;
     maxGrade?: string;
     rated?: boolean;
@@ -161,11 +162,58 @@ export class HindenrankClient {
     const params: Record<string, string> = {};
     if (options?.source) params.source = options.source;
     if (options?.chain) params.chain = options.chain;
+    if (options?.strategy) params.strategy = options.strategy;
     if (options?.minGrade) params.minGrade = options.minGrade;
     if (options?.maxGrade) params.maxGrade = options.maxGrade;
     if (options?.rated) params.rated = "true";
     if (options?.limit) params.limit = String(options.limit);
     if (options?.offset) params.offset = String(options.offset);
     return this.fetch<BasicVault[]>(`${this.baseUrl}/vaults`, params);
+  }
+
+  async getVaultCorrelations() {
+    return this.fetch<{
+      matrix: Record<string, Record<string, number>>;
+      vaultIds: string[];
+      diversificationAll: number | null;
+      windowDays: number;
+      vaultCount: number;
+      computedAt: string;
+    }>("vaults/correlations");
+  }
+
+  async getDiversificationScore(vaultIds: string[]) {
+    return this.fetch<{
+      vaultIds: string[];
+      diversificationScore: number | null;
+      computedAt: string;
+    }>("vaults/diversification-score", { vaults: vaultIds.join(",") });
+  }
+
+  async getModelPortfolio(params: {
+    maxVaults?: number;
+    minSharpe?: number;
+    maxCorrelation?: number;
+    strategies?: string;
+    realtime?: boolean;
+  } = {}) {
+    const query: Record<string, string> = {};
+    if (params.maxVaults) query.maxVaults = String(params.maxVaults);
+    if (params.minSharpe) query.minSharpe = String(params.minSharpe);
+    if (params.maxCorrelation) query.maxCorrelation = String(params.maxCorrelation);
+    if (params.strategies) query.strategies = params.strategies;
+    if (params.realtime) query.realtime = "true";
+    return this.fetch<{
+      portfolio: Array<{
+        vaultId: string;
+        name: string;
+        strategyType: string | null;
+        riskGrade: string | null;
+        sharpeRatio: number | null;
+        weight: number;
+      }>;
+      diversificationScore: number | null;
+      computedAt: string;
+    }>("vaults/model-portfolio", query);
   }
 }
